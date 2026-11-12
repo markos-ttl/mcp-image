@@ -1,3 +1,5 @@
+import type { ReferenceImage } from './referenceImage.js'
+
 export const ASPECT_RATIO_VALUES = [
   '1:1',
   '1:4',
@@ -52,6 +54,7 @@ export interface GenerateImageParams {
   prompt: string
   fileName?: string
   inputImagePaths?: string[]
+  inputImages?: ReferenceImage[]
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
   useWorldKnowledge?: boolean
@@ -68,12 +71,10 @@ export interface MCPServerConfig {
   name: string
   version: string
   defaultOutputDir: string
+  imageResponseMode?: 'file' | 'inline'
 }
 
-type McpContent = {
-  type: 'text'
-  text: string
-}
+type McpContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
 
 export interface McpToolResponse {
   content: McpContent[]
@@ -96,7 +97,7 @@ export interface ResourceContent {
   metadata: {
     model: string
     provider?: string
-    /** Milliseconds from receiving the request to saving the image. */
+    /** Milliseconds spent processing the image request. */
     processingTime: number
     contextMethod: PromptContextMethod
     timestamp: string

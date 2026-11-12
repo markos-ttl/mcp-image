@@ -187,6 +187,10 @@ All three providers support these presets for generation and editing. You can ov
 | `IMAGE_OUTPUT_DIR` | `./output` | Directory where generated images are saved; use an absolute path in MCP configuration |
 | `IMAGE_QUALITY` | `fast` | Default quality preset: `fast`, `balanced`, or `quality` |
 | `SKIP_PROMPT_ENHANCEMENT` | `false` | Set to `true` to send prompts through unchanged |
+| `MCP_TRANSPORT` | `stdio` | Set to `http` for remote MCP clients such as Executor |
+| `HOST` | `127.0.0.1` | HTTP bind address; Docker sets this to `0.0.0.0` inside the container |
+| `PORT` | `3000` | HTTP listen port; Compose fixes the container port and uses `HTTP_PORT` for the host mapping |
+| `MCP_HTTP_TOKEN` | - | Required in HTTP mode: a random private URL token of 32 to 128 URL-safe characters |
 
 You can configure keys for more than one provider and switch per request. A request-level `provider` option takes precedence over `IMAGE_PROVIDER`.
 
@@ -219,6 +223,64 @@ The OpenAI adapter sends generation requests to `/images/generations` and refere
 
 Prompt enhancement uses the same base URL and API key as image generation. If your custom provider supports the Responses API, remove `SKIP_PROMPT_ENHANCEMENT` and set `OPENAI_TEXT_MODEL` to a text model it offers. Otherwise keep enhancement disabled. Gemini and Seedream have equivalent image and text model overrides in the table above. Each adapter retains its existing API format and capability limits.
 
+### Executor and remote MCP clients
+
+The default transport is stdio for local MCP clients. HTTP mode provides a stateless Streamable HTTP endpoint for Executor and other remote MCP clients. It returns generated images as standard MCP image content with metadata, without saving files on the server. Reference images are supplied inline instead of using server file paths.
+
+#### Deploy with Docker
+
+1. Copy `.env.example` to `.env` and fill in your provider's key, base URL, and exact image model ID. These are server-side settings; Executor does not receive the provider key.
+2. Generate a private endpoint token and set it as `MCP_HTTP_TOKEN` in `.env`:
+
+   ```sh
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+3. Build and start the container:
+
+   ```sh
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+4. Put an HTTPS reverse proxy or tunnel in front of `http://127.0.0.1:3000`. Preserve the request path and allow requests and responses large enough for image data. Allow at least six minutes for image generation. The Compose service binds only to the host's loopback interface; `HTTP_PORT` changes that host port.
+5. In Executor's **Connect a service** form, import the remote MCP URL:
+
+   ```text
+   https://your-host.example/mcp/YOUR_MCP_HTTP_TOKEN
+   ```
+
+The complete URL is a private access credential: anyone holding it can invoke your configured providers. Keep it private, use HTTPS, and configure your reverse proxy to omit the secret path from access logs. This uses possession of the URL for access, rather than an OAuth sign-in or an extra authorization header. Changing `MCP_HTTP_TOKEN` and recreating the container revokes the old URL; update the URL in Executor afterwards. The server never logs the token. `/health` is a public health check and does not reveal provider settings.
+
+The container runs as a non-root user with a read-only filesystem. Provider credentials and the endpoint token are read at runtime from the ignored `.env` file and excluded from the Docker build context. No image storage volume is needed. The Docker image starts the built code from this checkout, including custom provider support.
+
+An optional Caddy configuration is included for a public server. Point a domain at that server, allow inbound TCP ports 80 and 443, and set `MCP_DOMAIN` in `.env`. Then start both services with:
+
+```sh
+docker compose -f compose.yaml -f compose.https.yaml up -d --build
+```
+
+Caddy provides HTTPS for that hostname and forwards the private endpoint path to the image server. The supplied configuration omits request URIs from its runtime log fields and leaves access logging disabled. Keep the same two `-f` arguments when managing this deployment.
+
+#### Run HTTP mode without Docker
+
+Build the project and run `node dist/index.js` with `MCP_TRANSPORT=http`, `MCP_HTTP_TOKEN`, and the same provider environment variables as above. `HOST` defaults to `127.0.0.1` and `PORT` to `3000`. An HTTPS proxy or tunnel is needed to make the endpoint reachable from Executor. A `.env` file is loaded by Docker Compose; for a direct Node invocation, use `node --env-file=.env dist/index.js`.
+
+HTTP mode accepts POST requests at `/mcp/<MCP_HTTP_TOKEN>` and returns JSON MCP responses. Requests from browser origins are rejected. It permits up to eight active requests, a 32 MiB HTTP request body, and 10 MiB per inline reference image; provider-specific limits still apply. Generation results include image bytes directly, so there are no public download routes or `file://` references.
+
+For image editing over HTTP, call `generate_image` with references in this form:
+
+```json
+{
+  "prompt": "Make the teapot red while preserving its shape",
+  "inputImages": [
+    { "data": "BASE64_IMAGE_BYTES", "mimeType": "image/png" }
+  ]
+}
+```
+
+Supported reference MIME types are PNG, JPEG, and WebP (Seedream accepts PNG and JPEG). Use base64 bytes without a `data:` prefix; image bytes must match the declared MIME type. HTTP mode rejects `inputImagePaths` before reading or checking any file. Local stdio mode continues to use `inputImagePaths` and saves images in `IMAGE_OUTPUT_DIR`.
+
 ## Tool Reference
 
 Your MCP client calls this tool for you. Open the reference when you need to check an option or provider limitation.
@@ -231,7 +293,8 @@ Your MCP client calls this tool for you. Open the reference when you need to che
 | `prompt` | string | Yes | Image description or editing instruction |
 | `quality` | string | No | `fast`, `balanced`, or `quality`; overrides `IMAGE_QUALITY` |
 | `provider` | string | No | `gemini`, `openai`, or `seedream`; overrides `IMAGE_PROVIDER` |
-| `inputImagePaths` | string[] | No | Absolute paths to input images for editing |
+| `inputImagePaths` | string[] | No | Local stdio mode: absolute paths to input images for editing |
+| `inputImages` | object[] | No | HTTP mode: inline references with base64 `data` and `mimeType`, in prompt order |
 | `fileName` | string | No | Output filename; `.png`, `.jpg`, or `.jpeg` selects the format for OpenAI and Seedream |
 | `aspectRatio` | string | No | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, or `8:1` |
 | `imageSize` | string | No | `1K`, `2K`, or `4K`; availability depends on the provider |

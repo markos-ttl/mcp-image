@@ -1,9 +1,6 @@
 import type { ImageProvider } from './mcp.js'
 
-export interface ReferenceImage {
-  data: string
-  mimeType: string
-}
+export type { ReferenceImage } from './referenceImage.js'
 
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 export const MAX_INPUT_IMAGES = {

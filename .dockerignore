@@ -1,0 +1,11 @@
+.git
+.github
+.husky
+node_modules
+dist
+tmp
+temp
+output
+logs
+*.log
+.env*

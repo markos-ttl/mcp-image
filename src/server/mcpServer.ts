@@ -10,7 +10,12 @@ import {
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
 import { generateFileName, readInputImage, saveImage } from '../business/fileManager.js'
 import { validateGenerateImageParams } from '../business/inputValidator.js'
-import { buildErrorResponse, buildSuccessResponse } from '../business/responseBuilder.js'
+import { validateRemoteGenerateImageParams } from '../business/remoteInputValidator.js'
+import {
+  buildErrorResponse,
+  buildInlineSuccessResponse,
+  buildSuccessResponse,
+} from '../business/responseBuilder.js'
 import {
   createStructuredPromptGenerator,
   type FeatureFlags,
@@ -154,12 +159,16 @@ export class MCPServerImpl {
   }
 
   public getToolsList(): ListToolsResult {
+    const remote = this.config.imageResponseMode === 'inline'
+    const referenceArgument = remote ? 'inputImages' : 'inputImagePaths'
+    const outputDescription = remote
+      ? 'Returns the image directly as MCP image content.'
+      : 'Saves the result and returns a file resource.'
     return {
       tools: [
         {
           name: 'generate_image',
-          description:
-            "Generate a new image from a text prompt or edit and combine reference images using inputImagePaths. Saves the result and returns a file resource. Prompt enhancement expands these arguments into the final image prompt without seeing the conversation, filling in the details they leave open, so pass the user's intent as they gave it; anything you add is expanded too. When a guess at the image's purpose or style would likely miss what the user needs, ask them first.",
+          description: `Generate a new image from a text prompt or edit and combine reference images using ${referenceArgument}. ${outputDescription} Prompt enhancement expands these arguments into the final image prompt without seeing the conversation, filling in the details they leave open, so pass the user's intent as they gave it; anything you add is expanded too. When a guess at the image's purpose or style would likely miss what the user needs, ask them first.`,
           inputSchema: {
             type: 'object' as const,
             properties: {
@@ -171,16 +180,43 @@ export class MCPServerImpl {
               fileName: {
                 type: 'string' as const,
                 description:
-                  'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. Other or absent suffixes use the provider default; the saved filename is corrected to the actual image extension.',
+                  'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. Other or absent suffixes use the provider default. In local mode, the saved filename is corrected to the actual image extension.',
               },
-              inputImagePaths: {
-                type: 'array' as const,
-                items: { type: 'string' as const, minLength: 1 },
-                minItems: 1,
-                maxItems: MAX_INPUT_IMAGES.openai,
-                description:
-                  'Absolute paths to reference images in prompt order. Use a one-element array for one image. Limits: Gemini 14, OpenAI 16, Seedream 10. Omit for text-only generation.',
-              },
+              ...(this.config.imageResponseMode === 'inline'
+                ? {
+                    inputImages: {
+                      type: 'array' as const,
+                      minItems: 1,
+                      maxItems: MAX_INPUT_IMAGES.openai,
+                      description:
+                        'Reference images in prompt order, supplied inline. Each image may be at most 10 MiB. Limits: Gemini 14, OpenAI 16, Seedream 10. Omit for text-only generation.',
+                      items: {
+                        type: 'object' as const,
+                        properties: {
+                          data: {
+                            type: 'string' as const,
+                            description: 'Base64 image bytes without a data URL prefix.',
+                          },
+                          mimeType: {
+                            type: 'string' as const,
+                            enum: ['image/png', 'image/jpeg', 'image/webp'],
+                          },
+                        },
+                        required: ['data', 'mimeType'],
+                        additionalProperties: false,
+                      },
+                    },
+                  }
+                : {
+                    inputImagePaths: {
+                      type: 'array' as const,
+                      items: { type: 'string' as const, minLength: 1 },
+                      minItems: 1,
+                      maxItems: MAX_INPUT_IMAGES.openai,
+                      description:
+                        'Absolute paths to reference images in prompt order. Use a one-element array for one image. Limits: Gemini 14, OpenAI 16, Seedream 10. Omit for text-only generation.',
+                    },
+                  }),
               blendImages: {
                 type: 'boolean' as const,
                 description:
@@ -341,48 +377,19 @@ export class MCPServerImpl {
     return buildErrorResponse(result.error)
   }
 
-  /**
-   * One image generation, in order: validate, resolve config and provider,
-   * load any input image, enhance the prompt, generate, then save. Runs inside
-   * the caller's error boundary, so a failed step throws.
-   */
-  private async generateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
-    const startedAt = performance.now()
-    signal?.throwIfAborted()
-    const params = unwrapOrThrow(validateGenerateImageParams(args))
-
-    const sanitizedFileName = params.fileName
-      ? this.securityManager.sanitizeFilename(params.fileName)
-      : undefined
-    const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
-
-    const config = unwrapOrThrow(getConfig())
-
-    // Reject an unusable output path before anything is sent upstream.
-    unwrapOrThrow(
-      this.securityManager.sanitizeFilePath(
-        path.join(config.imageOutputDir, sanitizedFileName ?? 'image.png')
-      )
-    )
-
-    const providerName = params.provider ?? config.imageProvider
-    unwrapOrThrow(validateProviderCredentials(config, providerName))
-    const provider = getImageProviderDefinition(providerName)
-
-    const { imageClient, structuredPromptGenerator } = this.getProviderClients(
-      config,
-      providerName,
-      provider
-    )
-
+  private async loadInputImages(
+    params: GenerateImageParams,
+    provider: ImageProvider,
+    signal?: AbortSignal
+  ): Promise<ReferenceImage[]> {
     const inputPaths = params.inputImagePaths ?? []
-    if (inputPaths.length > MAX_INPUT_IMAGES[providerName]) {
+    const inputImages = [...(params.inputImages ?? [])]
+    if (inputPaths.length + inputImages.length > MAX_INPUT_IMAGES[provider]) {
       throw new InputValidationError(
-        `${providerName} accepts at most ${MAX_INPUT_IMAGES[providerName]} input images`,
-        'Reduce the number of paths in inputImagePaths'
+        `${provider} accepts at most ${MAX_INPUT_IMAGES[provider]} input images`,
+        'Reduce the number of reference images'
       )
     }
-    const inputImages: ReferenceImage[] = []
     for (const [index, inputPath] of inputPaths.entries()) {
       signal?.throwIfAborted()
       try {
@@ -394,6 +401,50 @@ export class MCPServerImpl {
         throw readError
       }
     }
+    return inputImages
+  }
+
+  /**
+   * One image generation, in order: validate, resolve config and provider,
+   * load any input image, enhance the prompt, generate, then save. Runs inside
+   * the caller's error boundary, so a failed step throws.
+   */
+  private async generateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
+    const startedAt = performance.now()
+    signal?.throwIfAborted()
+    const params = unwrapOrThrow(
+      this.config.imageResponseMode === 'inline'
+        ? validateRemoteGenerateImageParams(args)
+        : validateGenerateImageParams(args)
+    )
+
+    const sanitizedFileName = params.fileName
+      ? this.securityManager.sanitizeFilename(params.fileName)
+      : undefined
+    const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
+
+    const config = unwrapOrThrow(getConfig())
+
+    // Reject an unusable output path before anything is sent upstream.
+    if (this.config.imageResponseMode !== 'inline') {
+      unwrapOrThrow(
+        this.securityManager.sanitizeFilePath(
+          path.join(config.imageOutputDir, sanitizedFileName ?? 'image.png')
+        )
+      )
+    }
+
+    const providerName = params.provider ?? config.imageProvider
+    unwrapOrThrow(validateProviderCredentials(config, providerName))
+    const provider = getImageProviderDefinition(providerName)
+
+    const { imageClient, structuredPromptGenerator } = this.getProviderClients(
+      config,
+      providerName,
+      provider
+    )
+
+    const inputImages = await this.loadInputImages(params, providerName, signal)
 
     const imageOptions = buildImageOptions(params, inputImages, preferredOutputFormat)
 
@@ -419,6 +470,12 @@ export class MCPServerImpl {
     signal?.throwIfAborted()
 
     const generatedImage = unwrapOrThrow(generationResult)
+    if (this.config.imageResponseMode === 'inline') {
+      return buildInlineSuccessResponse(generatedImage, {
+        processingTime: Math.round(performance.now() - startedAt),
+        contextMethod: imagePrompt.contextMethod,
+      })
+    }
     const mimeType = generatedImage.metadata.mimeType
     const { fileName, requestedExtension, corrected } = resolveOutputFileName(
       params.fileName,

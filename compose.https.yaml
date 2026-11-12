@@ -1,0 +1,20 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN to your public hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      mcp-image:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

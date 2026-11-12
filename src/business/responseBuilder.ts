@@ -133,6 +133,37 @@ export function buildSuccessResponse(
   }
 }
 
+export function buildInlineSuccessResponse(
+  generationResult: GeneratedImageResult,
+  report: Pick<ResourceContent['metadata'], 'processingTime' | 'contextMethod'>
+): McpToolResponse {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          type: 'image',
+          mimeType: generationResult.metadata.mimeType,
+          metadata: {
+            model: generationResult.metadata.model,
+            ...(generationResult.metadata.provider && {
+              provider: generationResult.metadata.provider,
+            }),
+            ...report,
+            timestamp: generationResult.metadata.timestamp.toISOString(),
+          },
+        }),
+      },
+      {
+        type: 'image',
+        data: generationResult.imageData.toString('base64'),
+        mimeType: generationResult.metadata.mimeType,
+      },
+    ],
+    isError: false,
+  }
+}
+
 export function buildErrorResponse(
   error: Error,
   unknownFallback: UnknownErrorFallback = DEFAULT_UNKNOWN_ERROR_FALLBACK

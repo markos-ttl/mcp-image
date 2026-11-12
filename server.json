@@ -20,6 +20,34 @@
       },
       "environmentVariables": [
         {
+          "name": "MCP_TRANSPORT",
+          "description": "Transport: stdio (default) for local MCP clients, or http for a stateless remote MCP endpoint",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "HOST",
+          "description": "HTTP bind address (defaults to 127.0.0.1; Docker uses 0.0.0.0)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "PORT",
+          "description": "HTTP listen port (defaults to 3000)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "MCP_HTTP_TOKEN",
+          "description": "Required in HTTP mode: cryptographically random private URL token of 32 to 128 URL-safe characters; the remote endpoint is /mcp/<token>",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
           "name": "IMAGE_PROVIDER",
           "description": "Image provider to use: 'gemini' (default), 'openai', or 'seedream'",
           "isRequired": false,
