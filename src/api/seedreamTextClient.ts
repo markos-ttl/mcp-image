@@ -18,7 +18,7 @@ const DEFAULT_TEXT_TIMEOUT = 30000
 
 type SeedreamTextRequest = ResponseCreateParamsNonStreaming &
   Readonly<{
-    model: typeof SEEDREAM_TEXT_MODEL
+    model: string
     thinking: Readonly<{
       type: 'disabled'
     }>
@@ -26,11 +26,13 @@ type SeedreamTextRequest = ResponseCreateParamsNonStreaming &
 
 class SeedreamTextClientImpl implements TextClient {
   private readonly client: OpenAI
+  private readonly modelName: string
 
   constructor(config: Config) {
+    this.modelName = config.seedreamTextModel ?? SEEDREAM_TEXT_MODEL
     this.client = new OpenAI({
       apiKey: config.arkApiKey,
-      baseURL: MODELARK_BASE_URL,
+      baseURL: config.arkBaseUrl ?? MODELARK_BASE_URL,
     })
   }
 
@@ -44,7 +46,7 @@ class SeedreamTextClientImpl implements TextClient {
     }
 
     const request: SeedreamTextRequest = {
-      model: SEEDREAM_TEXT_MODEL,
+      model: this.modelName,
       input: buildOpenAICompatibleInput(prompt, config),
       ...(config.systemInstruction && { instructions: config.systemInstruction }),
       max_output_tokens: config.maxTokens ?? 8192,
@@ -146,7 +148,7 @@ class SeedreamTextClientImpl implements TextClient {
 
   private getAPIErrorSuggestion(statusCode: number | undefined): string {
     if (statusCode === 401 || statusCode === 403) {
-      return 'Check that ARK_API_KEY is valid and can access the pinned Seedream text model'
+      return 'Check that ARK_API_KEY is valid and can access the configured Seedream text model'
     }
 
     if (statusCode === 429) {

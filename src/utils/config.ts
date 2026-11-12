@@ -9,6 +9,15 @@ export interface Config {
   geminiApiKey: string
   openaiApiKey: string
   arkApiKey: string
+  geminiBaseUrl?: string
+  openaiBaseUrl?: string
+  arkBaseUrl?: string
+  geminiImageModel?: string
+  openaiImageModel?: string
+  seedreamImageModel?: string
+  geminiTextModel?: string
+  openaiTextModel?: string
+  seedreamTextModel?: string
   imageOutputDir: string
   skipPromptEnhancement: boolean
   imageQuality: ImageQuality
@@ -35,6 +44,50 @@ const DEFAULT_CONFIG = {
   imageProvider: 'gemini',
   imageOutputDir: './output',
 } as const
+
+const BASE_URL_SETTINGS = [
+  ['geminiBaseUrl', 'GEMINI_BASE_URL'],
+  ['openaiBaseUrl', 'OPENAI_BASE_URL'],
+  ['arkBaseUrl', 'ARK_BASE_URL'],
+] as const
+
+const MODEL_SETTINGS = [
+  ['geminiImageModel', 'GEMINI_IMAGE_MODEL'],
+  ['openaiImageModel', 'OPENAI_IMAGE_MODEL'],
+  ['seedreamImageModel', 'SEEDREAM_IMAGE_MODEL'],
+  ['geminiTextModel', 'GEMINI_TEXT_MODEL'],
+  ['openaiTextModel', 'OPENAI_TEXT_MODEL'],
+  ['seedreamTextModel', 'SEEDREAM_TEXT_MODEL'],
+] as const
+
+function validateBaseUrls(config: UnvalidatedConfig): Result<true, ConfigError> {
+  for (const [configKey, environmentVariable] of BASE_URL_SETTINGS) {
+    const value = config[configKey]
+    if (value === undefined) {
+      continue
+    }
+    try {
+      const url = new URL(value)
+      if (
+        !['http:', 'https:'].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error('Unsupported base URL')
+      }
+    } catch {
+      return Err(
+        new ConfigError(
+          `Invalid ${environmentVariable}`,
+          `Set ${environmentVariable} to an absolute HTTP(S) URL without credentials, query parameters, or a fragment`
+        )
+      )
+    }
+  }
+  return Ok(true)
+}
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]
@@ -119,6 +172,11 @@ export function validateConfig(config: UnvalidatedConfig): Result<Config, Config
     )
   }
 
+  const baseUrlResult = validateBaseUrls(config)
+  if (!baseUrlResult.success) {
+    return baseUrlResult
+  }
+
   return Ok({ ...config, imageProvider, imageQuality })
 }
 
@@ -131,6 +189,13 @@ export function getConfig(): Result<Config, ConfigError> {
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',
     imageQuality: readEnv('IMAGE_QUALITY') || 'fast',
+  }
+
+  for (const [configKey, environmentVariable] of [...BASE_URL_SETTINGS, ...MODEL_SETTINGS]) {
+    const value = readEnv(environmentVariable)?.trim()
+    if (value) {
+      config[configKey] = value
+    }
   }
 
   return validateConfig(config)

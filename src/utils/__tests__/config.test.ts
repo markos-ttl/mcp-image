@@ -7,6 +7,19 @@ describe('config', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv }
+    for (const name of [
+      'GEMINI_BASE_URL',
+      'OPENAI_BASE_URL',
+      'ARK_BASE_URL',
+      'GEMINI_IMAGE_MODEL',
+      'OPENAI_IMAGE_MODEL',
+      'SEEDREAM_IMAGE_MODEL',
+      'GEMINI_TEXT_MODEL',
+      'OPENAI_TEXT_MODEL',
+      'SEEDREAM_TEXT_MODEL',
+    ]) {
+      delete process.env[name]
+    }
     delete process.env.IMAGE_PROVIDER
     delete process.env.GEMINI_API_KEY
     delete process.env.OPENAI_API_KEY
@@ -133,6 +146,81 @@ describe('config', () => {
   })
 
   describe('getConfig', () => {
+    it('reads and trims custom endpoints and model names independently for every provider', () => {
+      Object.assign(process.env, {
+        GEMINI_BASE_URL: ' https://gemini.example.com/proxy ',
+        OPENAI_BASE_URL: ' http://localhost:8080/v1/ ',
+        ARK_BASE_URL: ' https://ark.example.com/api/v3/ ',
+        GEMINI_IMAGE_MODEL: ' custom-gemini-image ',
+        OPENAI_IMAGE_MODEL: ' custom-gpt-image ',
+        SEEDREAM_IMAGE_MODEL: ' custom-seedream-image ',
+        GEMINI_TEXT_MODEL: ' custom-gemini-text ',
+        OPENAI_TEXT_MODEL: ' custom-openai-text ',
+        SEEDREAM_TEXT_MODEL: ' custom-seedream-text ',
+      })
+
+      expect(getConfig()).toMatchObject({
+        success: true,
+        data: {
+          geminiBaseUrl: 'https://gemini.example.com/proxy',
+          openaiBaseUrl: 'http://localhost:8080/v1/',
+          arkBaseUrl: 'https://ark.example.com/api/v3/',
+          geminiImageModel: 'custom-gemini-image',
+          openaiImageModel: 'custom-gpt-image',
+          seedreamImageModel: 'custom-seedream-image',
+          geminiTextModel: 'custom-gemini-text',
+          openaiTextModel: 'custom-openai-text',
+          seedreamTextModel: 'custom-seedream-text',
+        },
+      })
+    })
+
+    it.each(['', '   ', 'undefined', 'null'])(
+      'keeps provider defaults for unset overrides (%j)',
+      (value) => {
+        process.env.GEMINI_BASE_URL = value
+        process.env.OPENAI_BASE_URL = value
+        process.env.ARK_BASE_URL = value
+        process.env.OPENAI_IMAGE_MODEL = value
+        process.env.OPENAI_TEXT_MODEL = value
+
+        const result = getConfig()
+
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.geminiBaseUrl).toBeUndefined()
+          expect(result.data.openaiBaseUrl).toBeUndefined()
+          expect(result.data.arkBaseUrl).toBeUndefined()
+          expect(result.data.openaiImageModel).toBeUndefined()
+          expect(result.data.openaiTextModel).toBeUndefined()
+        }
+      }
+    )
+
+    it.each(['GEMINI_BASE_URL', 'OPENAI_BASE_URL', 'ARK_BASE_URL'])(
+      'rejects invalid %s values without disclosing the URL',
+      (name) => {
+        for (const value of [
+          'not-a-url',
+          '/relative/path',
+          'file:///private/path',
+          'https://user:private-password@example.com/v1',
+          'https://example.com/v1?key=private-key',
+          'https://example.com/v1#fragment',
+        ]) {
+          process.env[name] = value
+          const result = getConfig()
+
+          expect(result.success).toBe(false)
+          if (!result.success) {
+            expect(result.error.message).toBe(`Invalid ${name}`)
+            expect(result.error.suggestion).toContain('absolute HTTP(S) URL')
+            expect(JSON.stringify(result.error)).not.toContain(value)
+          }
+        }
+      }
+    )
+
     it('should return config with default values when environment variables are not set', () => {
       const result = getConfig()
 

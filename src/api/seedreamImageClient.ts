@@ -8,7 +8,7 @@ import { isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 import { validateInputImages } from './inputImages.js'
 
-const SEEDREAM_IMAGE_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/images/generations'
+const MODELARK_BASE_URL = 'https://ark.ap-southeast.bytepluses.com/api/v3'
 const SEEDREAM_IMAGE_TIMEOUT_MS = 300000
 const MAX_RESPONSE_BYTES = 48 * 1024 * 1024
 const MAX_DECODED_BYTES = 32 * 1024 * 1024
@@ -74,7 +74,7 @@ type ResolvedCapabilities = Readonly<{
 }>
 
 type SeedreamImageWireRequest = Readonly<{
-  model: 'dola-seedream-5-0-pro-260628'
+  model: string
   prompt: string
   image?: string | string[]
   size: ImageSize
@@ -324,7 +324,9 @@ function parseImagePayload(
 class SeedreamImageClientImpl implements ImageClient {
   constructor(
     private readonly apiKey: string,
-    private readonly defaultQuality: ImageQuality
+    private readonly defaultQuality: ImageQuality,
+    private readonly endpoint: string,
+    private readonly imageModel?: string
   ) {}
 
   async generateImage(
@@ -335,11 +337,14 @@ class SeedreamImageClientImpl implements ImageClient {
       return resolvedResult
     }
 
-    const request = buildWireRequest(params, resolvedResult.data)
+    const request = {
+      ...buildWireRequest(params, resolvedResult.data),
+      ...(this.imageModel && { model: this.imageModel }),
+    }
 
     try {
       const timeoutSignal = AbortSignal.timeout(SEEDREAM_IMAGE_TIMEOUT_MS)
-      const response = await fetch(SEEDREAM_IMAGE_ENDPOINT, {
+      const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -367,7 +372,7 @@ class SeedreamImageClientImpl implements ImageClient {
       return Ok({
         imageData: imageResult.data,
         metadata: {
-          model: resolvedResult.data.route.model,
+          model: request.model,
           provider: 'seedream',
           prompt: request.prompt,
           mimeType: getMimeTypeForOutputFormat(request.output_format),
@@ -401,7 +406,7 @@ class SeedreamImageClientImpl implements ImageClient {
           upstreamStatus: statusCode,
           suggestion:
             statusCode === 401 || statusCode === 403
-              ? 'Check that ARK_API_KEY can access the pinned Seedream image model'
+              ? 'Check that ARK_API_KEY can access the configured Seedream image model'
               : 'Check the supported Seedream image request options and account quota',
         },
         statusCode
@@ -477,5 +482,14 @@ export function createSeedreamImageClient(config: Config): Result<ImageClient, I
     return capabilityResult
   }
 
-  return Ok(new SeedreamImageClientImpl(config.arkApiKey, config.imageQuality))
+  const baseUrl = config.arkBaseUrl ?? MODELARK_BASE_URL
+  const endpoint = `${baseUrl.replace(/\/+$/, '')}/images/generations`
+  return Ok(
+    new SeedreamImageClientImpl(
+      config.arkApiKey,
+      config.imageQuality,
+      endpoint,
+      config.seedreamImageModel
+    )
+  )
 }

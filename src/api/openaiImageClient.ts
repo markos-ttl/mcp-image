@@ -126,7 +126,8 @@ export function validateOpenAIOptions(
 class OpenAIImageClientImpl implements ImageClient {
   constructor(
     private readonly client: OpenAI,
-    private readonly defaultQuality: ImageQuality = 'fast'
+    private readonly defaultQuality: ImageQuality = 'fast',
+    private readonly imageModel?: string
   ) {}
 
   async generateImage(
@@ -140,7 +141,8 @@ class OpenAIImageClientImpl implements ImageClient {
 
       const effectiveQuality = params.quality ?? this.defaultQuality
       const modelName =
-        effectiveQuality === 'quality' ? OPENAI_IMAGE_MODELS.SUNBURST : OPENAI_IMAGE_MODELS.FLARE
+        this.imageModel ??
+        (effectiveQuality === 'quality' ? OPENAI_IMAGE_MODELS.SUNBURST : OPENAI_IMAGE_MODELS.FLARE)
       const quality = mapQuality(effectiveQuality)
       const size = mapSize(params)
       const outputFormat: ImageOutputFormat = params.preferredOutputFormat ?? 'png'
@@ -283,8 +285,9 @@ export function createOpenAIImageClient(config: Config): Result<ImageClient, Ima
   try {
     const client = new OpenAI({
       apiKey: config.openaiApiKey,
+      ...(config.openaiBaseUrl && { baseURL: config.openaiBaseUrl }),
     })
-    return Ok(new OpenAIImageClientImpl(client, config.imageQuality))
+    return Ok(new OpenAIImageClientImpl(client, config.imageQuality, config.openaiImageModel))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

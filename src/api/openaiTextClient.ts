@@ -29,11 +29,13 @@ const OPENAI_TEXT_MODEL = 'gpt-5.6-luna'
 
 class OpenAITextClientImpl implements TextClient {
   private readonly client: OpenAI
-  private readonly modelName = OPENAI_TEXT_MODEL
+  private readonly modelName: string
 
   constructor(config: Config) {
+    this.modelName = config.openaiTextModel ?? OPENAI_TEXT_MODEL
     this.client = new OpenAI({
       apiKey: config.openaiApiKey,
+      ...(config.openaiBaseUrl && { baseURL: config.openaiBaseUrl }),
     })
   }
 
@@ -140,7 +142,7 @@ class OpenAITextClientImpl implements TextClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return `Ensure ${OPENAI_TEXT_MODEL} is available to your OpenAI account`
+      return `Ensure ${this.modelName} is available at the configured OpenAI endpoint`
     }
 
     return 'Check OpenAI API configuration and try again'

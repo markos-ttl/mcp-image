@@ -45,7 +45,8 @@ function googleSearchTypesFor(modelName: string): SearchTypes {
 class GeminiClientImpl implements ImageClient {
   constructor(
     private readonly genai: GeminiClientInstance,
-    private readonly defaultQuality: ImageQuality = 'fast'
+    private readonly defaultQuality: ImageQuality = 'fast',
+    private readonly imageModel?: string
   ) {}
 
   async generateImage(
@@ -60,7 +61,7 @@ class GeminiClientImpl implements ImageClient {
 
       const effectiveQuality = params.quality ?? this.defaultQuality
 
-      const modelName = effectiveQuality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH
+      const modelName = this.modelForQuality(effectiveQuality)
       const thinkingLevel = THINKING_LEVEL_BY_QUALITY[effectiveQuality]
 
       const imageConfig: ImageConfig = {}
@@ -116,6 +117,10 @@ class GeminiClientImpl implements ImageClient {
     } catch (error) {
       return this.handleError(error, params.prompt)
     }
+  }
+
+  private modelForQuality(quality: ImageQuality): string {
+    return this.imageModel ?? (quality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH)
   }
 
   private handleError(
@@ -195,8 +200,9 @@ export function createGeminiClient(config: Config): Result<ImageClient, GeminiAP
   try {
     const genai: GeminiClientInstance = new GoogleGenAI({
       apiKey: config.geminiApiKey,
+      ...(config.geminiBaseUrl && { httpOptions: { baseUrl: config.geminiBaseUrl } }),
     })
-    return Ok(new GeminiClientImpl(genai, config.imageQuality))
+    return Ok(new GeminiClientImpl(genai, config.imageQuality, config.geminiImageModel))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

@@ -31,12 +31,14 @@ interface GeminiAIInstance {
 }
 
 class GeminiTextClientImpl implements GeminiTextClient {
-  private readonly modelName = 'gemini-3.8-flash'
+  private readonly modelName: string
   private readonly genai: GeminiAIInstance
 
   constructor(config: Config) {
+    this.modelName = config.geminiTextModel ?? 'gemini-3.8-flash'
     this.genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,
+      ...(config.geminiBaseUrl && { httpOptions: { baseUrl: config.geminiBaseUrl } }),
     })
   }
 

@@ -242,6 +242,114 @@ describe('request and output boundaries', () => {
   }
 
   const PROVIDERS = ['gemini', 'openai', 'seedream'] as const
+  const CUSTOM_PROVIDER_ENV = {
+    gemini: {
+      GEMINI_BASE_URL: 'https://gemini.example.com/proxy/',
+      GEMINI_IMAGE_MODEL: 'custom-gemini-image',
+      GEMINI_TEXT_MODEL: 'custom-gemini-text',
+    },
+    openai: {
+      OPENAI_BASE_URL: 'https://openai.example.com/proxy/v1/',
+      OPENAI_IMAGE_MODEL: 'custom-gpt-image',
+      OPENAI_TEXT_MODEL: 'custom-openai-text',
+    },
+    seedream: {
+      ARK_BASE_URL: 'https://ark.example.com/proxy/api/v3/',
+      SEEDREAM_IMAGE_MODEL: 'custom-seedream-image',
+      SEEDREAM_TEXT_MODEL: 'custom-seedream-text',
+    },
+  } as const
+
+  function customImageModel(provider: ImageProvider): string {
+    return provider === 'openai' ? 'custom-gpt-image' : `custom-${provider}-image`
+  }
+
+  function assertCustomImageRoute(
+    provider: ImageProvider,
+    call: Parameters<typeof fetch>,
+    edit: boolean
+  ): void {
+    const url = new URL(String(call[0]))
+    const host = provider === 'seedream' ? 'ark' : provider
+    expect(url.origin).toBe(`https://${host}.example.com`)
+    expect(url.pathname).toMatch(/^\/proxy\//)
+    expect(url.pathname).not.toContain('//')
+    if (provider === 'gemini') {
+      expect(url.pathname).toContain('/models/custom-gemini-image:generateContent')
+      return
+    }
+    const body = call[1]?.body
+    const model = body instanceof FormData ? body.get('model') : serializedBody(call)['model']
+    expect(model).toBe(customImageModel(provider))
+    expect(url.pathname).toBe(
+      provider === 'openai'
+        ? `/proxy/v1/images/${edit ? 'edits' : 'generations'}`
+        : '/proxy/api/v3/images/generations'
+    )
+  }
+
+  function assertCustomTextRoute(provider: ImageProvider, call: Parameters<typeof fetch>): void {
+    const url = new URL(String(call[0]))
+    const host = provider === 'seedream' ? 'ark' : provider
+    expect(url.origin).toBe(`https://${host}.example.com`)
+    if (provider === 'gemini') {
+      expect(url.pathname).toContain('/models/custom-gemini-text:generateContent')
+      return
+    }
+    expect(serializedBody(call)['model']).toBe(`custom-${provider}-text`)
+    expect(url.pathname).toBe(
+      provider === 'openai' ? '/proxy/v1/responses' : '/proxy/api/v3/responses'
+    )
+  }
+
+  function configureCustomProviders(): void {
+    for (const settings of Object.values(CUSTOM_PROVIDER_ENV)) {
+      for (const [name, value] of Object.entries(settings)) {
+        vi.stubEnv(name, value)
+      }
+    }
+  }
+
+  it.each(
+    PROVIDERS.flatMap((provider) => [
+      { provider, edit: false, quality: 'fast' },
+      { provider, edit: true, quality: 'quality' },
+    ])
+  )(
+    'routes $provider to its custom endpoint and model (edit=$edit, quality=$quality)',
+    async ({ provider, edit, quality }) => {
+      configureCustomProviders()
+      vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', String(edit))
+      const { paths, references } = await writeReferences()
+      const apiCalls = serveProvider(provider, edit ? undefined : textResponse)
+
+      const result = await client.callTool({
+        name: 'generate_image',
+        arguments: {
+          provider,
+          prompt: 'use the supplied references',
+          quality,
+          ...(edit && { inputImagePaths: paths }),
+        },
+      })
+
+      expect(result.isError).toBe(false)
+      const calls = apiCalls()
+      expect(calls).toHaveLength(edit ? 1 : 2)
+      const imageCall = expectDefined(calls.at(-1), 'custom image request')
+      assertCustomImageRoute(provider, imageCall, edit)
+      if (edit) {
+        await assertImageReferences(provider, imageCall, references, 'use the supplied references')
+      } else {
+        assertCustomTextRoute(provider, expectDefined(calls[0], 'custom enhancement request'))
+      }
+      const payload = parseToolPayload(result)
+      expect(readPath(payload, 'metadata', 'model')).toBe(customImageModel(provider))
+      const uri = expectString(readPath(payload, 'resource', 'uri'), 'image URI')
+      expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
+    }
+  )
+
   const ENHANCED_MODES = [
     {
       mode: 'enhanced, two references',

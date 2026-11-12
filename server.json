@@ -48,6 +48,69 @@
           "isSecret": true
         },
         {
+          "name": "GEMINI_BASE_URL",
+          "description": "Custom Gemini API root for image generation and prompt enhancement; the Google SDK adds the API version and model path",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "OPENAI_BASE_URL",
+          "description": "Custom OpenAI-compatible API base URL including its API prefix, for example https://provider.example/v1; used for images and prompt enhancement",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "ARK_BASE_URL",
+          "description": "Custom ModelArk API base URL for images and prompt enhancement (defaults to https://ark.ap-southeast.bytepluses.com/api/v3)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "GEMINI_IMAGE_MODEL",
+          "description": "Override the Gemini image model for all quality presets",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "OPENAI_IMAGE_MODEL",
+          "description": "Override the OpenAI-compatible image model for all quality presets; use the exact model ID offered by your provider",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "SEEDREAM_IMAGE_MODEL",
+          "description": "Override the Seedream image model or endpoint ID for all quality presets",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "GEMINI_TEXT_MODEL",
+          "description": "Override the model used for Gemini prompt enhancement",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "OPENAI_TEXT_MODEL",
+          "description": "Override the model used for OpenAI-compatible Responses API prompt enhancement; use SKIP_PROMPT_ENHANCEMENT=true for image-only providers",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "SEEDREAM_TEXT_MODEL",
+          "description": "Override the model used for Seedream prompt enhancement",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
           "name": "IMAGE_OUTPUT_DIR",
           "description": "Absolute or working-directory-relative path where generated images will be saved (defaults to ./output)",
           "isRequired": false,

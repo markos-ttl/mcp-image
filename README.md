@@ -175,11 +175,49 @@ All three providers support these presets for generation and editing. You can ov
 | `GEMINI_API_KEY` | - | API key for Gemini |
 | `OPENAI_API_KEY` | - | API key for OpenAI |
 | `ARK_API_KEY` | - | ModelArk AP API key for Seedream |
+| `GEMINI_BASE_URL` | Google SDK default | Custom Gemini API base URL, applied to image generation and prompt enhancement |
+| `OPENAI_BASE_URL` | OpenAI SDK default | Custom OpenAI-compatible API base URL, including its API prefix (for example, `https://provider.example/v1`) |
+| `ARK_BASE_URL` | `https://ark.ap-southeast.bytepluses.com/api/v3` | Custom ModelArk API base URL, applied to image generation and prompt enhancement |
+| `GEMINI_IMAGE_MODEL` | Quality preset selects the model | Override the Gemini image model for every quality preset |
+| `OPENAI_IMAGE_MODEL` | Quality preset selects the model | Override the OpenAI image model for every quality preset |
+| `SEEDREAM_IMAGE_MODEL` | `dola-seedream-5-0-pro-260628` | Override the Seedream image model or endpoint ID |
+| `GEMINI_TEXT_MODEL` | `gemini-3.8-flash` | Model used for Gemini prompt enhancement |
+| `OPENAI_TEXT_MODEL` | `gpt-5.6-luna` | Model used for OpenAI prompt enhancement |
+| `SEEDREAM_TEXT_MODEL` | `seed-2-0-lite-260428` | Model used for Seedream prompt enhancement |
 | `IMAGE_OUTPUT_DIR` | `./output` | Directory where generated images are saved; use an absolute path in MCP configuration |
 | `IMAGE_QUALITY` | `fast` | Default quality preset: `fast`, `balanced`, or `quality` |
 | `SKIP_PROMPT_ENHANCEMENT` | `false` | Set to `true` to send prompts through unchanged |
 
 You can configure keys for more than one provider and switch per request. A request-level `provider` option takes precedence over `IMAGE_PROVIDER`.
+
+### Custom providers and model names
+
+To use GPT Image models hosted by another provider, select the OpenAI adapter and set the provider's API key, base URL, and exact model ID in your MCP server environment. For example:
+
+```json
+{
+  "mcpServers": {
+    "mcp-image": {
+      "command": "npx",
+      "args": ["-y", "mcp-image"],
+      "env": {
+        "IMAGE_PROVIDER": "openai",
+        "OPENAI_API_KEY": "your_provider_api_key",
+        "OPENAI_BASE_URL": "https://provider.example/v1",
+        "OPENAI_IMAGE_MODEL": "gpt-image-1",
+        "SKIP_PROMPT_ENHANCEMENT": "true",
+        "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
+      }
+    }
+  }
+}
+```
+
+Use the API base URL, without `/images/generations`, `/images/edits`, or `/responses`; the adapter adds the endpoint path. Trailing slashes are supported. `GEMINI_BASE_URL` is a Gemini API root (for example, `https://gemini-proxy.example`); the Google SDK adds its API version and model path. URLs must use HTTP or HTTPS, with no embedded credentials, query parameters, or fragments. Empty override values keep the defaults. Restart the MCP server after changing these settings.
+
+The OpenAI adapter sends generation requests to `/images/generations` and reference-image edits to `/images/edits`, and expects base64 image data in `data[].b64_json`. The custom endpoint must accept the adapter's request options, including size, quality, and output format. Model overrides apply across all quality presets; the presets still control the other request options, including OpenAI's `low`, `high`, and `max` quality values. Choose options supported by your model and provider.
+
+Prompt enhancement uses the same base URL and API key as image generation. If your custom provider supports the Responses API, remove `SKIP_PROMPT_ENHANCEMENT` and set `OPENAI_TEXT_MODEL` to a text model it offers. Otherwise keep enhancement disabled. Gemini and Seedream have equivalent image and text model overrides in the table above. Each adapter retains its existing API format and capability limits.
 
 ## Tool Reference
 
