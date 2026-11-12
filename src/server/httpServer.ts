@@ -14,13 +14,13 @@ function sendError(response: ServerResponse, status: number, message: string): v
 }
 
 function matchesPath(request: IncomingMessage, expected: Buffer): boolean {
-  const actual = Buffer.from(request.url ?? '')
+  const actual = Buffer.from((request.url ?? '').replace(/\/$/, ''))
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
 
 /** Private URL access works with remote MCP importers that do not accept custom headers. */
 export function createHttpMcpServer(config: HttpServerConfig): Server {
-  const expectedPath = Buffer.from(`/mcp/${config.token}`)
+  const expectedPath = Buffer.from(`/image-mcp/${config.token}`)
   const logger = new Logger()
   let activeRequests = 0
 

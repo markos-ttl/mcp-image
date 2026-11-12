@@ -65,7 +65,9 @@ describe('package entry point', () => {
     try {
       await ready
       await client.connect(
-        new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${address.port}/mcp/${token}`))
+        new StreamableHTTPClientTransport(
+          new URL(`http://127.0.0.1:${address.port}/image-mcp/${token}/`)
+        )
       )
       const { tools } = await client.listTools()
       expect(tools.map(({ name }) => name)).toEqual(['generate_image'])

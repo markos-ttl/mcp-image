@@ -52,7 +52,7 @@ describe('HTTP MCP server', () => {
     if (!address || typeof address === 'string') {
       throw new Error('Expected an HTTP listening address')
     }
-    endpoint = new URL(`http://127.0.0.1:${address.port}/mcp/${TOKEN}`)
+    endpoint = new URL(`http://127.0.0.1:${address.port}/image-mcp/${TOKEN}/`)
   })
 
   afterEach(async () => {
@@ -66,10 +66,10 @@ describe('HTTP MCP server', () => {
     vi.unstubAllGlobals()
   })
 
-  async function connect(): Promise<Client> {
+  async function connect(url = endpoint): Promise<Client> {
     const client = new Client({ name: 'http-integration-test', version: '1' })
     clients.push(client)
-    await client.connect(new StreamableHTTPClientTransport(endpoint))
+    await client.connect(new StreamableHTTPClientTransport(url))
     return client
   }
 
@@ -92,6 +92,11 @@ describe('HTTP MCP server', () => {
     expect(tool.inputSchema.properties).toHaveProperty('inputImages')
     expect(tool.inputSchema.properties).not.toHaveProperty('inputImagePaths')
     expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('also accepts the private endpoint without its trailing slash', async () => {
+    const client = await connect(new URL(endpoint.href.slice(0, -1)))
+    expect((await client.listTools()).tools[0]?.name).toBe('generate_image')
   })
 
   it('returns exact image bytes and custom model metadata without writing files', async () => {
@@ -210,7 +215,12 @@ describe('HTTP MCP server', () => {
     const health = await realFetch(new URL('/health', endpoint))
     expect(health.status).toBe(200)
     expect(await health.json()).toEqual({ status: 'ok' })
-    for (const path of ['/mcp', '/mcp/wrong-token', `/mcp/${TOKEN}x`]) {
+    for (const path of [
+      '/image-mcp/',
+      '/image-mcp/wrong-token/',
+      `/image-mcp/${TOKEN}x/`,
+      `/mcp/${TOKEN}`,
+    ]) {
       const response = await realFetch(new URL(path, endpoint), { method: 'POST', body: '{}' })
       expect(response.status).toBe(404)
       expect(await response.text()).not.toContain(TOKEN)

@@ -247,7 +247,7 @@ The default transport is stdio for local MCP clients. HTTP mode provides a state
 5. In Executor's **Connect a service** form, import the remote MCP URL:
 
    ```text
-   https://your-host.example/mcp/YOUR_MCP_HTTP_TOKEN
+   https://your-host.example/image-mcp/YOUR_MCP_HTTP_TOKEN/
    ```
 
 The complete URL is a private access credential: anyone holding it can invoke your configured providers. Keep it private, use HTTPS, and configure your reverse proxy to omit the secret path from access logs. This uses possession of the URL for access, rather than an OAuth sign-in or an extra authorization header. Changing `MCP_HTTP_TOKEN` and recreating the container revokes the old URL; update the URL in Executor afterwards. The server never logs the token. `/health` is a public health check and does not reveal provider settings.
@@ -266,7 +266,7 @@ Caddy provides HTTPS for that hostname and forwards the private endpoint path to
 
 Build the project and run `node dist/index.js` with `MCP_TRANSPORT=http`, `MCP_HTTP_TOKEN`, and the same provider environment variables as above. `HOST` defaults to `127.0.0.1` and `PORT` to `3000`. An HTTPS proxy or tunnel is needed to make the endpoint reachable from Executor. A `.env` file is loaded by Docker Compose; for a direct Node invocation, use `node --env-file=.env dist/index.js`.
 
-HTTP mode accepts POST requests at `/mcp/<MCP_HTTP_TOKEN>` and returns JSON MCP responses. Requests from browser origins are rejected. It permits up to eight active requests, a 32 MiB HTTP request body, and 10 MiB per inline reference image; provider-specific limits still apply. Generation results include image bytes directly, so there are no public download routes or `file://` references.
+HTTP mode accepts POST requests at `/image-mcp/<MCP_HTTP_TOKEN>/` (with or without the trailing slash) and returns JSON MCP responses. Requests from browser origins are rejected. It permits up to eight active requests, a 32 MiB HTTP request body, and 10 MiB per inline reference image; provider-specific limits still apply. Generation results include image bytes directly, so there are no public download routes or `file://` references.
 
 For image editing over HTTP, call `generate_image` with references in this form:
 

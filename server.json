@@ -42,7 +42,7 @@
         },
         {
           "name": "MCP_HTTP_TOKEN",
-          "description": "Required in HTTP mode: cryptographically random private URL token of 32 to 128 URL-safe characters; the remote endpoint is /mcp/<token>",
+          "description": "Required in HTTP mode: cryptographically random private URL token of 32 to 128 URL-safe characters; the remote endpoint is /image-mcp/<token>/",
           "isRequired": false,
           "format": "string",
           "isSecret": true

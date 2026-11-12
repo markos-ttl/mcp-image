@@ -17,10 +17,14 @@ async function startHttp(config: HttpServerConfig): Promise<void> {
       resolve()
     })
   })
-  logger.info('mcp-startup', 'HTTP MCP server listening; endpoint is /mcp/<MCP_HTTP_TOKEN>', {
-    host: config.host,
-    port: config.port,
-  })
+  logger.info(
+    'mcp-startup',
+    'HTTP MCP server listening; endpoint is /image-mcp/<MCP_HTTP_TOKEN>/',
+    {
+      host: config.host,
+      port: config.port,
+    }
+  )
   const shutdown = (): void => {
     const timeout = setTimeout(() => server.closeAllConnections(), 10000)
     timeout.unref()
