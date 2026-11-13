@@ -243,7 +243,7 @@ The default transport is stdio for local MCP clients. HTTP mode provides a state
    docker compose ps
    ```
 
-4. Put an HTTPS reverse proxy or tunnel in front of `http://127.0.0.1:3000`. Preserve the request path and allow requests and responses large enough for image data. Allow at least six minutes for image generation. The Compose service binds only to the host's loopback interface; `HTTP_PORT` changes that host port.
+4. Put an HTTPS reverse proxy or tunnel in front of `http://127.0.0.1:3001`. Preserve the request path and allow requests and responses large enough for image data. Allow at least six minutes for image generation. The Compose service binds only to the host's loopback interface; `HTTP_PORT` changes that host port. The container still listens on port 3000.
 5. In Executor's **Connect a service** form, import the remote MCP URL:
 
    ```text
@@ -261,6 +261,14 @@ docker compose -f compose.yaml -f compose.https.yaml up -d --build
 ```
 
 Caddy provides HTTPS for that hostname and forwards the private endpoint path to the image server. The supplied configuration omits request URIs from its runtime log fields and leaves access logging disabled. Keep the same two `-f` arguments when managing this deployment.
+
+#### Deploy with Dokploy
+
+Use `compose.dokploy.yaml` as the Compose file path in your Dokploy deployment. It exposes port 3000 only within the container network and publishes no host ports, so it does not conflict with Dokploy's own port 3000. Use this file on its own, rather than combining it with `compose.yaml` or `compose.https.yaml`.
+
+Set the provider environment variables and `MCP_HTTP_TOKEN` in Dokploy's Environment settings. In Domains, select service `mcp-image`, container port `3000`, and path `/`, then enable HTTPS for your domain and redeploy. Leave direct published port mappings empty. Dokploy's proxy handles HTTPS, so the optional Caddy service is not needed. The resulting MCP URL is `https://your-host.example/image-mcp/YOUR_MCP_HTTP_TOKEN/`.
+
+For standalone Compose deployments, the default host port is now 3001. Existing `.env` files with `HTTP_PORT=3000` must be changed to `HTTP_PORT=3001` to use the new host port. `HTTP_PORT` is unused by the Dokploy-specific file.
 
 #### Run HTTP mode without Docker
 
