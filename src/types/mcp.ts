@@ -41,7 +41,7 @@ export const IMAGE_CATEGORY_VALUES = [
 
 export type ImageCategory = (typeof IMAGE_CATEGORY_VALUES)[number]
 
-export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream'] as const
+export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream', 'codex'] as const
 
 export type ImageProvider = (typeof IMAGE_PROVIDER_VALUES)[number]
 

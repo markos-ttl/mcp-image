@@ -8,6 +8,8 @@ describe('config', () => {
   beforeEach(() => {
     process.env = { ...originalEnv }
     for (const name of [
+      'CODEX_COMMAND',
+      'CODEX_MODEL',
       'GEMINI_BASE_URL',
       'OPENAI_BASE_URL',
       'ARK_BASE_URL',
@@ -31,6 +33,19 @@ describe('config', () => {
 
   afterEach(() => {
     process.env = originalEnv
+  })
+
+  it('accepts Codex without API keys and reads CLI overrides', () => {
+    process.env.IMAGE_PROVIDER = 'codex'
+    process.env.CODEX_COMMAND = '/usr/local/bin/codex'
+    process.env.CODEX_MODEL = 'test-model'
+    const result = getConfig()
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.codexCommand).toBe('/usr/local/bin/codex')
+      expect(result.data.codexModel).toBe('test-model')
+      expect(validateProviderCredentials(result.data, 'codex').success).toBe(true)
+    }
   })
 
   describe('validateConfig', () => {
@@ -279,7 +294,7 @@ describe('config', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(ConfigError)
         expect(result.error.message).toBe(
-          'Invalid IMAGE_PROVIDER value: "midjourney". Valid options: gemini, openai, seedream'
+          'Invalid IMAGE_PROVIDER value: "midjourney". Valid options: gemini, openai, seedream, codex'
         )
       }
     })

@@ -5,6 +5,8 @@ import { Err, Ok } from '../types/result.js'
 import { ConfigError } from './errors.js'
 
 export interface Config {
+  codexCommand?: string
+  codexModel?: string
   imageProvider: ImageProvider
   geminiApiKey: string
   openaiApiKey: string
@@ -52,6 +54,8 @@ const BASE_URL_SETTINGS = [
 ] as const
 
 const MODEL_SETTINGS = [
+  ['codexCommand', 'CODEX_COMMAND'],
+  ['codexModel', 'CODEX_MODEL'],
   ['geminiImageModel', 'GEMINI_IMAGE_MODEL'],
   ['openaiImageModel', 'OPENAI_IMAGE_MODEL'],
   ['seedreamImageModel', 'SEEDREAM_IMAGE_MODEL'],
@@ -115,7 +119,7 @@ const PROVIDER_CREDENTIALS = {
     configKey: 'arkApiKey',
     environmentVariable: 'ARK_API_KEY',
   },
-} as const satisfies Record<ImageProvider, ProviderCredentialConfig>
+} as const satisfies Record<Exclude<ImageProvider, 'codex'>, ProviderCredentialConfig>
 
 /**
  * Validates the API credentials required by a single image provider.
@@ -127,6 +131,9 @@ export function validateProviderCredentials(
   config: Config,
   provider: ImageProvider
 ): Result<Config, ConfigError> {
+  if (provider === 'codex') {
+    return Ok(config)
+  }
   const { configKey, environmentVariable } = PROVIDER_CREDENTIALS[provider]
   const credential = config[configKey]
 

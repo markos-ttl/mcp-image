@@ -354,3 +354,28 @@ MIT License. See [LICENSE](LICENSE) for details.
 ---
 
 Need help? [Open an issue](https://github.com/shinpr/mcp-image/issues) or check [Troubleshooting](#troubleshooting).
+
+### Codex subscription provider (experimental)
+
+Set `IMAGE_PROVIDER=codex` or pass `provider: "codex"` in a generation request. This uses a ChatGPT-authenticated Codex CLI and its Codex limits. Prompt enhancement is automatically skipped. Your account must have access to built-in Codex image generation.
+
+The Docker image includes Codex CLI 0.169.0. Both Compose deployments persist the login in the `codex-home` volume. Rebuild the image, start it, then log in **inside the container**:
+
+```sh
+docker compose -f compose.dokploy.yaml exec mcp-image codex login --device-auth
+docker compose -f compose.dokploy.yaml exec mcp-image codex login status
+```
+
+In Dokploy's container terminal, run `codex login --device-auth` and follow its browser instructions. A login on the VPS host alone is not visible in the container. The volume must be writable by user `node` (UID 1000). Keep login credentials private; do not commit them or put them in `.env`.
+
+For local use, install `npm install -g @openai/codex@0.169.0`, run `codex login`, then start the MCP with `IMAGE_PROVIDER=codex`. `CODEX_HOME` can select the login directory. `CODEX_COMMAND` optionally selects a native executable; on Windows select `codex.exe` rather than a `.cmd` shim. `CODEX_MODEL` optionally selects the Codex reasoning model, rather than an Images API model.
+
+The HTTPS endpoint stays `/image-mcp/<token>/`. Example MCP arguments:
+
+```json
+{"prompt":"A blue coffee mug on a white background","provider":"codex","aspectRatio":"1:1","imageSize":"1K"}
+```
+
+Each request runs in a separate temporary workspace and removes its files afterward. User Codex configuration is ignored to avoid loading custom proxies, hooks, or MCP servers. API-key environment variables are cleared for the child process. Reference images are passed through `--image`. Output is PNG only; size, aspect ratio, and quality are prompt preferences rather than guaranteed API parameters. JPEG output and Google Search grounding are rejected. Requests time out after five minutes; cancellation terminates the CLI. No API-provider fallback occurs.
+
+This experimental adapter requires Codex to save exactly one PNG under the request workspace's `generated_images` directory. CLI changes may affect that behavior. Automated tests use mocked CLI execution; actual subscription generation and the Docker build still need a smoke test on the signed-in VPS.

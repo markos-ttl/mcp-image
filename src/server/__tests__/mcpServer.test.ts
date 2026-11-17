@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
+import { createCodexImageClient } from '../../api/codexImageClient.js'
 import { createGeminiClient } from '../../api/geminiClient.js'
 import { createOpenAIImageClient } from '../../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../../api/openaiTextClient.js'
@@ -111,6 +112,25 @@ vi.mock('../../api/openaiTextClient', () => {
   }
 })
 
+vi.mock('../../api/codexImageClient', () => ({
+  createCodexImageClient: vi.fn(() => ({
+    generateImage: vi.fn(async () => ({
+      success: true,
+      data: {
+        imageData: GEMINI_IMAGE_BYTES,
+        metadata: {
+          model: 'codex-default',
+          provider: 'codex',
+          prompt: 'A mug',
+          mimeType: 'image/png',
+          timestamp: new Date(),
+          inputImageProvided: false,
+        },
+      },
+    })),
+  })),
+}))
+
 describe('MCP Server', () => {
   let outputDir: string
 
@@ -131,6 +151,17 @@ describe('MCP Server', () => {
     vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await rm(outputDir, { recursive: true, force: true })
+  })
+
+  it('uses Codex without API credentials or a separate enhancement client', async () => {
+    vi.stubEnv('GEMINI_API_KEY', undefined)
+    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+    const server = createMCPServer({ imageResponseMode: 'inline' })
+    const result = await server.callTool('generate_image', { prompt: 'A mug', provider: 'codex' })
+    expect(result.isError).not.toBe(true)
+    expect(createCodexImageClient).toHaveBeenCalledOnce()
+    expect(createOpenAITextClient).not.toHaveBeenCalled()
+    expect(result.content.some((item) => item.type === 'image')).toBe(true)
   })
 
   it('should report the package name and version', () => {
@@ -198,7 +229,7 @@ describe('MCP Server', () => {
       },
       imageSize: { type: 'string', enum: ['1K', '2K', '4K'] },
       quality: { type: 'string', enum: ['fast', 'balanced', 'quality'] },
-      provider: { type: 'string', enum: ['gemini', 'openai', 'seedream'] },
+      provider: { type: 'string', enum: ['gemini', 'openai', 'seedream', 'codex'] },
     })
 
     // Provider routing guidance the calling model relies on.

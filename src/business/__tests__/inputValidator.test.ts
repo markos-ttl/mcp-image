@@ -284,7 +284,7 @@ describe('inputValidator', () => {
   })
 
   describe('validateGenerateImageParams with provider', () => {
-    it.each(['gemini', 'openai', 'seedream'])('should accept provider %s', (provider) => {
+    it.each(['gemini', 'openai', 'seedream', 'codex'])('should accept provider %s', (provider) => {
       const result = validateGenerateImageParams({ prompt: 'test', provider })
 
       expect(result.success).toBe(true)
@@ -293,7 +293,7 @@ describe('inputValidator', () => {
     it('should reject invalid provider value', () => {
       expectRejection(
         { prompt: 'test', provider: 'midjourney' },
-        'Invalid provider value: "midjourney". Supported values: gemini, openai, seedream'
+        'Invalid provider value: "midjourney". Supported values: gemini, openai, seedream, codex'
       )
     })
   })

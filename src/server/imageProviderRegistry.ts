@@ -1,3 +1,4 @@
+import { createCodexImageClient } from '../api/codexImageClient.js'
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
@@ -33,6 +34,16 @@ function unwrap<T, E extends Error>(result: Result<T, E>): T {
 }
 
 const IMAGE_PROVIDERS = {
+  codex: {
+    promptGeneration: { maxTokens: 1000 },
+    createTextClient: (): TextClient => {
+      throw new Error('Codex handles its own prompt; enhancement must be skipped')
+    },
+    createImageClient: (config): ImageClient => createCodexImageClient(config),
+    validateImageOptions: (options): void => {
+      unwrap(validateInputImages('codex', options.inputImages))
+    },
+  },
   gemini: {
     promptGeneration: { maxTokens: 2000 },
     createTextClient: (config): TextClient => unwrap(createGeminiTextClient(config)),

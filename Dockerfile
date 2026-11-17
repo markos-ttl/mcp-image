@@ -11,6 +11,10 @@ WORKDIR /app
 ENV NODE_ENV=production MCP_TRANSPORT=http HOST=0.0.0.0 PORT=3000
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN npx --yes pnpm@11.24.0 install --prod --frozen-lockfile --ignore-scripts
+RUN npm install --global @openai/codex@0.169.0 \
+    && mkdir -p /home/node/.codex \
+    && chown node:node /home/node/.codex
+ENV CODEX_HOME=/home/node/.codex
 COPY --from=build /app/dist ./dist
 USER node
 EXPOSE 3000

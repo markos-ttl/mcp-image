@@ -10,12 +10,17 @@ services:
       MCP_HTTP_TOKEN: ${MCP_HTTP_TOKEN:?Set a random MCP_HTTP_TOKEN in .env}
     expose:
       - "3000"
+    volumes:
+      - codex-home:/home/node/.codex
     init: true
     restart: unless-stopped
     read_only: true
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
+      - /tmp:rw,noexec,nosuid,size=512m
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  codex-home:

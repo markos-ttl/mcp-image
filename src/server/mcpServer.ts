@@ -435,6 +435,9 @@ export class MCPServerImpl {
     }
 
     const providerName = params.provider ?? config.imageProvider
+    if (providerName === 'codex') {
+      config.skipPromptEnhancement = true
+    }
     unwrapOrThrow(validateProviderCredentials(config, providerName))
     const provider = getImageProviderDefinition(providerName)
 
